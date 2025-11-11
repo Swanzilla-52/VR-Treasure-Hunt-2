@@ -11,6 +11,7 @@ import {
   DirectionalLight,
   AmbientLight,
   SphereGeometry,
+  CanvasTexture,
 } from '@iwsdk/core';
 
 import {
@@ -20,9 +21,7 @@ import {
 } from '@iwsdk/core';
 
 import { PanelSystem } from './panel.js'; // system for displaying "Enter VR" panel on Quest 1
-import { MeshBasicMaterial, PlaneGeometry as ThreePlaneGeometry, CanvasTexture } from 'three';
-
-const assets = { 
+const assets = {
   oakTree: {
     url: '/gltf/Tree/oak_tree.glb',
     type: AssetType.GLTF,
@@ -35,10 +34,10 @@ World.create(document.getElementById('scene-container'), {
   xr: {
     sessionMode: SessionMode.ImmersiveVR,
     offer: 'always',
-    features: { }
+    features: {}
   },
 
-  features: { 
+  features: {
     locomotion: {
       smooth: true,
       teleport: true,
@@ -89,110 +88,111 @@ World.create(document.getElementById('scene-container'), {
   // --- Spheres ---
   const sphereGeometry = new SphereGeometry(0.5, 32, 32);
   const sphereMaterial = new MeshStandardMaterial({
-    color: 0xffd700,
-    metalness: 0.8,
-    roughness: 0.2,
-    emissive: 0x332200,
-    emissiveIntensity: 0.3,
-  });
+  color: 0xffd700,
+  metalness: 0.8,
+  roughness: 0.2,
+  emissive: 0x332200,
+  emissiveIntensity: 0.3,
+});
 
-  let collected = 0;
+let collected = 0;
 
-  function handleCollect(entity) {
-    entity.destroy();
-    collected++;
-    if (collected === 3) showWinMessage();
+function handleCollect(entity) {
+  entity.destroy();
+  collected++;
+  if (collected === 3) showWinMessage();
+}
+
+function createSphere(x, y, z) {
+  const sphere = new Mesh(sphereGeometry, sphereMaterial);
+  sphere.position.set(x, y, z);
+  sphere.castShadow = true;
+  sphere.receiveShadow = true;
+  const entity = world.createTransformEntity(sphere);
+  entity.addComponent(Interactable);
+  entity.object3D.addEventListener("pointerdown", () => handleCollect(entity));
+  return entity;
+}
+
+createSphere(3, 0.5, -5);
+createSphere(-5, 0.5, 8);
+createSphere(10, 0.5, -8);
+
+// --- Canvas Message ---
+const canvas = document.createElement('canvas');
+const ctx = canvas.getContext('2d');
+canvas.width = 1024;
+canvas.height = 256;
+
+const texture = new CanvasTexture(canvas);
+const messagePlane = new Mesh(
+  new PlaneGeometry(10, 2.5),
+  new MeshStandardMaterial({ map: texture, transparent: true })
+);
+messagePlane.position.set(0, 2, -4);
+
+const messageEntity = world.createTransformEntity(messagePlane);
+
+function drawMessage(text, color = '#ffffffff', fontSize = 80) {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = color;
+  ctx.font = `bold ${fontSize}px Arial`;
+  ctx.textAlign = 'center';
+  ctx.fillText(text, canvas.width / 2, 160);
+  texture.needsUpdate = true;
+}
+
+drawMessage('Find all the golden spheres!');
+
+function showWinMessage() {
+  drawMessage('YOU WIN!', '#ffffffff', 120);
+}
+
+
+
+
+
+
+
+
+
+
+
+// vvvvvvvv EVERYTHING BELOW WAS ADDED TO DISPLAY A BUTTON TO ENTER VR FOR QUEST 1 DEVICES vvvvvv
+//          (for some reason IWSDK doesn't show Enter VR button on Quest 1)
+world.registerSystem(PanelSystem);
+
+if (isMetaQuest1()) {
+  const panelEntity = world
+    .createTransformEntity()
+    .addComponent(PanelUI, {
+      config: '/ui/welcome.json',
+      maxHeight: 0.8,
+      maxWidth: 1.6
+    })
+    .addComponent(Interactable)
+    .addComponent(ScreenSpace, {
+      top: '20px',
+      left: '20px',
+      height: '40%'
+    });
+  panelEntity.object3D.position.set(0, 1.29, -1.9);
+} else {
+  // Skip panel on non-Meta-Quest-1 devices
+  // Useful for debugging on desktop or newer headsets.
+  console.log('Panel UI skipped: not running on Meta Quest 1 (heuristic).');
+}
+function isMetaQuest1() {
+  try {
+    const ua = (navigator && (navigator.userAgent || '')) || '';
+    const hasOculus = /Oculus|Quest|Meta Quest/i.test(ua);
+    const isQuest2or3 = /Quest\s?2|Quest\s?3|Quest2|Quest3|MetaQuest2|Meta Quest 2/i.test(ua);
+    return hasOculus && !isQuest2or3;
+  } catch (e) {
+    return false;
   }
-
-  function createSphere(x, y, z) {
-    const sphere = new Mesh(sphereGeometry, sphereMaterial);
-    sphere.position.set(x, y, z);
-    sphere.castShadow = true;
-    sphere.receiveShadow = true;
-    const entity = world.createTransformEntity(sphere);
-    entity.addComponent(Interactable);
-    entity.object3D.addEventListener("pointerdown", () => handleCollect(entity));
-    return entity;
-  }
-
-  createSphere(3, 0.5, -5);
-  createSphere(-5, 0.5, 8);
-  createSphere(10, 0.5, -8);
-
-  // --- Canvas Message ---
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d');
-  canvas.width = 1024;
-  canvas.height = 256;
-
-  const texture = new CanvasTexture(canvas);
-  const messagePlane = new Mesh(
-    new ThreePlaneGeometry(10, 2.5),
-    new MeshBasicMaterial({ map: texture, transparent: true })
-  );
-  messagePlane.position.set(0, 8, -10);
-  scene.add(messagePlane);
-
-  function drawMessage(text, color = '#0a0a09ff', fontSize = 80) {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.4)';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    ctx.fillStyle = color;
-    ctx.font = `bold ${fontSize}px Arial`;
-    ctx.textAlign = 'center';
-    ctx.fillText(text, canvas.width / 2, 160);
-    texture.needsUpdate = true;
-  }
-
-  drawMessage('Find all the golden spheres!');
-
-  function showWinMessage() {
-    drawMessage('YOU WIN!', '#070707ff', 120);
-  }
-
-
-
-
-
-
-
-
-
-
-
-  // vvvvvvvv EVERYTHING BELOW WAS ADDED TO DISPLAY A BUTTON TO ENTER VR FOR QUEST 1 DEVICES vvvvvv
-  //          (for some reason IWSDK doesn't show Enter VR button on Quest 1)
-  world.registerSystem(PanelSystem);
-  
-  if (isMetaQuest1()) {
-    const panelEntity = world
-      .createTransformEntity()
-      .addComponent(PanelUI, {
-        config: '/ui/welcome.json',
-        maxHeight: 0.8,
-        maxWidth: 1.6
-      })
-      .addComponent(Interactable)
-      .addComponent(ScreenSpace, {
-        top: '20px',
-        left: '20px',
-        height: '40%'
-      });
-    panelEntity.object3D.position.set(0, 1.29, -1.9);
-  } else {
-    // Skip panel on non-Meta-Quest-1 devices
-    // Useful for debugging on desktop or newer headsets.
-    console.log('Panel UI skipped: not running on Meta Quest 1 (heuristic).');
-  }
-  function isMetaQuest1() {
-    try {
-      const ua = (navigator && (navigator.userAgent || '')) || '';
-      const hasOculus = /Oculus|Quest|Meta Quest/i.test(ua);
-      const isQuest2or3 = /Quest\s?2|Quest\s?3|Quest2|Quest3|MetaQuest2|Meta Quest 2/i.test(ua);
-      return hasOculus && !isQuest2or3;
-    } catch (e) {
-      return false;
-    }
-  }
+}
 
 });
