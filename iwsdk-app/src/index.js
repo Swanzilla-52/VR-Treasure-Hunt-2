@@ -74,7 +74,7 @@ World.create(document.getElementById('scene-container'), {
   treeModel.castShadow = true;
   treeModel.receiveShadow = true;
 
-  const spacing = 6;
+  const spacing = 8;
   const gridSize = 30;
   const half = gridSize / 2;
   for (let x = -half; x <= half; x += spacing) {
